@@ -118,7 +118,7 @@ pyinstaller @buildArgs
 # Check if build was successful
 if (Test-Path "dist\PortDetective.exe") {
     Write-Host "`n========================================" -ForegroundColor Green
-    Write-Host "Build successful!" -ForegroundColor Green
+    Write-Host "Executable build successful!" -ForegroundColor Green
     Write-Host "Executable: dist\PortDetective.exe" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
     
@@ -131,5 +131,51 @@ else {
     exit 1
 }
 
-Write-Host "`nNote: The executable requires Npcap to be installed on the target system." -ForegroundColor Yellow
-Write-Host "Download Npcap from: https://npcap.com/" -ForegroundColor Yellow
+# Build installer using Inno Setup
+Write-Host "`n========================================" -ForegroundColor Cyan
+Write-Host "Building Windows Installer..." -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+
+# Find Inno Setup compiler
+$isccPaths = @(
+    "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+    "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
+    "${env:ProgramFiles(x86)}\Inno Setup 5\ISCC.exe",
+    "${env:ProgramFiles}\Inno Setup 5\ISCC.exe"
+)
+
+$isccPath = $null
+foreach ($path in $isccPaths) {
+    if (Test-Path $path) {
+        $isccPath = $path
+        break
+    }
+}
+
+if ($isccPath) {
+    Write-Host "Found Inno Setup at: $isccPath" -ForegroundColor Green
+    
+    # Run Inno Setup compiler
+    & $isccPath "installer.iss"
+    
+    if (Test-Path "dist\PortDetective-Setup.exe") {
+        Write-Host "`n========================================" -ForegroundColor Green
+        Write-Host "Installer build successful!" -ForegroundColor Green
+        Write-Host "Installer: dist\PortDetective-Setup.exe" -ForegroundColor Green
+        Write-Host "========================================" -ForegroundColor Green
+        
+        $installerSize = (Get-Item "dist\PortDetective-Setup.exe").Length / 1MB
+        Write-Host "Installer size: $([math]::Round($installerSize, 2)) MB" -ForegroundColor Cyan
+    }
+    else {
+        Write-Host "Installer build failed!" -ForegroundColor Red
+    }
+}
+else {
+    Write-Host "Inno Setup not found. Skipping installer creation." -ForegroundColor Yellow
+    Write-Host "To create an installer, install Inno Setup from: https://jrsoftware.org/isdl.php" -ForegroundColor Yellow
+    Write-Host "The standalone executable is still available at: dist\PortDetective.exe" -ForegroundColor Yellow
+}
+
+Write-Host "`nNote: The application requires Npcap to be installed on the target system." -ForegroundColor Yellow
+Write-Host "The installer will prompt users to download Npcap if not detected." -ForegroundColor Yellow

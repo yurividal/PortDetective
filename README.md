@@ -49,11 +49,39 @@ A cross-platform application for listening to **Cisco Discovery Protocol (CDP)**
 
 ### Packet Capture Library (Required on all systems)
 The application uses system-level packet capture drivers that cannot be bundled:
-- **Windows**: [Npcap](https://npcap.com/) (install with WinPcap API-compatible mode)
+- **Windows**: [Npcap](https://npcap.com/) (install with WinPcap API-compatible mode) - the Windows installer will prompt you to download this if not detected
 - **Linux**: libpcap (`sudo apt install libpcap0.8`) - automatically installed with .deb package
 - **macOS**: libpcap (pre-installed, no action needed)
 
 ## Installation
+
+### Windows (Recommended)
+1. Download `PortDetective-Setup.exe` from the [Releases](https://github.com/yurividal/PortDetective/releases) page
+2. Run the installer
+3. If Npcap is not installed, the installer will prompt you to download it
+4. Choose whether to create Start Menu and Desktop shortcuts
+5. Launch PortDetective from the Start Menu or Desktop
+
+### Windows (Portable)
+Download `PortDetective.exe` for a standalone executable that doesn't require installation.
+
+### macOS
+1. Download `PortDetective-macOS.dmg` from the [Releases](https://github.com/yurividal/PortDetective/releases) page
+2. Open the DMG and drag PortDetective to Applications
+3. Run with `sudo` or grant admin privileges when prompted
+
+### Linux
+Download the `.deb` package or standalone binary from the [Releases](https://github.com/yurividal/PortDetective/releases) page.
+```bash
+# Install .deb package (includes libpcap dependency)
+sudo dpkg -i portdetective_1.0.0.deb
+
+# Or run standalone binary
+chmod +x portdetective
+sudo ./portdetective
+```
+
+## Building from Source
 
 1. **Clone or download this repository**
 

@@ -2,11 +2,11 @@ name: Build PortDetective
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
     tags:
-      - 'v*'
+      - "v*"
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
   build-windows:
@@ -18,7 +18,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -34,11 +34,21 @@ jobs:
         run: |
           pyinstaller --onefile --windowed --name "PortDetective" --icon "icon.ico" --add-data "icon.png;." --add-data "README.md;." --hidden-import "scapy.layers.l2" --hidden-import "scapy.contrib.cdp" --hidden-import "scapy.contrib.lldp" --hidden-import "PyQt6.QtCore" --hidden-import "PyQt6.QtWidgets" --hidden-import "PyQt6.QtGui" --collect-all "scapy" main.py
 
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup -y
+
+      - name: Build Windows Installer
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer.iss
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: PortDetective-Windows
-          path: dist/PortDetective.exe
+          path: |
+            dist/PortDetective.exe
+            dist/PortDetective-Setup.exe
 
   build-macos:
     runs-on: macos-latest
@@ -49,7 +59,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -98,7 +108,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install system dependencies
         run: |
@@ -121,11 +131,11 @@ jobs:
           mkdir -p portdetective_1.0.0/usr/bin
           mkdir -p portdetective_1.0.0/usr/share/applications
           mkdir -p portdetective_1.0.0/usr/share/icons/hicolor/256x256/apps
-          
+
           cp dist/portdetective portdetective_1.0.0/usr/bin/
           chmod 755 portdetective_1.0.0/usr/bin/portdetective
           cp icon.png portdetective_1.0.0/usr/share/icons/hicolor/256x256/apps/portdetective.png
-          
+
           cat > portdetective_1.0.0/DEBIAN/control << EOF
           Package: portdetective
           Version: 1.0.0
@@ -136,7 +146,7 @@ jobs:
           Maintainer: PortDetective
           Description: CDP and LLDP Discovery Protocol Monitor
           EOF
-          
+
           cat > portdetective_1.0.0/usr/share/applications/portdetective.desktop << EOF
           [Desktop Entry]
           Name=PortDetective
@@ -147,7 +157,7 @@ jobs:
           Type=Application
           Categories=Network;Monitor;
           EOF
-          
+
           dpkg-deb --build portdetective_1.0.0
           mv portdetective_1.0.0.deb dist/
 
@@ -171,6 +181,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
+            PortDetective-Windows/PortDetective-Setup.exe
             PortDetective-Windows/PortDetective.exe
             PortDetective-macOS/PortDetective-macOS.dmg
             PortDetective-Linux/portdetective
