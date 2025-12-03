@@ -28,9 +28,11 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QAbstractItemView,
     QTabWidget,
+    QComboBox,
+    QFrame,
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
-from PyQt6.QtGui import QFont, QColor, QIcon, QAction
+from PyQt6.QtGui import QFont, QColor, QIcon, QAction, QPalette
 
 from nic_detector import NICDetector, NetworkInterface
 from neighbor import DiscoveryNeighbor
@@ -98,6 +100,9 @@ class PortDetectiveWindow(QMainWindow):
         self.signals.capture_error.connect(self._show_error)
         self.signals.status_update.connect(self._update_status)
 
+        # Protocol mode setting: "auto", "cdp", "lldp", "both"
+        self.protocol_mode = "auto"
+
         # Setup UI
         self._setup_ui()
         self._load_interfaces()
@@ -116,14 +121,17 @@ class PortDetectiveWindow(QMainWindow):
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
-        # Top section - Interface selection
-        self._setup_interface_section(main_layout)
+        # Top section - Interface selection and Settings
+        top_layout = QHBoxLayout()
+        self._setup_interface_section(top_layout)
+        self._setup_settings_section(top_layout)
+        main_layout.addLayout(top_layout)
 
         # Middle section - Splitter with neighbors table and details
         splitter = QSplitter(Qt.Orientation.Vertical)
 
         # Neighbors table
-        neighbors_group = QGroupBox("Discovered Neighbors (CDP & LLDP)")
+        neighbors_group = QGroupBox("Discovered Neighbors")
         neighbors_layout = QVBoxLayout(neighbors_group)
         self._setup_neighbors_table(neighbors_layout)
         splitter.addWidget(neighbors_group)
@@ -153,9 +161,9 @@ class PortDetectiveWindow(QMainWindow):
         interface_layout = QVBoxLayout(interface_group)
 
         info_label = QLabel(
-            "Select one or more network interfaces to listen for CDP/LLDP packets:"
+            "Select one or more network interfaces to listen for discovery packets:"
         )
-        info_label.setStyleSheet("color: #666;")
+        info_label.setWordWrap(True)
         interface_layout.addWidget(info_label)
 
         h_layout = QHBoxLayout()
@@ -187,21 +195,81 @@ class PortDetectiveWindow(QMainWindow):
 
         btn_layout.addStretch()
 
+        h_layout.addLayout(btn_layout, stretch=1)
+        interface_layout.addLayout(h_layout)
+
+        parent_layout.addWidget(interface_group, stretch=2)
+
+    def _setup_settings_section(self, parent_layout):
+        """Setup the settings section."""
+        settings_group = QGroupBox("Settings")
+        settings_layout = QVBoxLayout(settings_group)
+
+        # Protocol mode
+        protocol_label = QLabel("Protocol Mode:")
+        protocol_label.setStyleSheet("font-weight: bold;")
+        settings_layout.addWidget(protocol_label)
+
+        self.protocol_combo = QComboBox()
+        self.protocol_combo.addItem("Auto (CDP preferred)", "auto")
+        self.protocol_combo.addItem("CDP Only", "cdp")
+        self.protocol_combo.addItem("LLDP Only", "lldp")
+        self.protocol_combo.addItem("Both (show all)", "both")
+        self.protocol_combo.setToolTip(
+            "Auto: Shows CDP if available, LLDP only if no CDP found\n"
+            "CDP Only: Only capture CDP packets\n"
+            "LLDP Only: Only capture LLDP packets\n"
+            "Both: Show all discovered neighbors"
+        )
+        self.protocol_combo.currentIndexChanged.connect(self._on_protocol_mode_changed)
+        settings_layout.addWidget(self.protocol_combo)
+
+        # Mode explanation
+        self.mode_explanation = QLabel()
+        self.mode_explanation.setWordWrap(True)
+        self.mode_explanation.setStyleSheet("color: #888; font-size: 11px;")
+        self._update_mode_explanation()
+        settings_layout.addWidget(self.mode_explanation)
+
+        settings_layout.addStretch()
+
+        # Separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        settings_layout.addWidget(separator)
+
+        # Action buttons
         self.start_btn = QPushButton("▶ Start Capture")
         self.start_btn.setStyleSheet(
             "background-color: #4CAF50; color: white; font-weight: bold; padding: 10px;"
         )
         self.start_btn.clicked.connect(self._toggle_capture)
-        btn_layout.addWidget(self.start_btn)
+        settings_layout.addWidget(self.start_btn)
 
         self.clear_btn = QPushButton("🗑 Clear Results")
         self.clear_btn.clicked.connect(self._clear_results)
-        btn_layout.addWidget(self.clear_btn)
+        settings_layout.addWidget(self.clear_btn)
 
-        h_layout.addLayout(btn_layout, stretch=1)
-        interface_layout.addLayout(h_layout)
+        parent_layout.addWidget(settings_group, stretch=1)
 
-        parent_layout.addWidget(interface_group)
+    def _on_protocol_mode_changed(self):
+        """Handle protocol mode change."""
+        self.protocol_mode = self.protocol_combo.currentData()
+        self._update_mode_explanation()
+        # Refresh table display to apply filter
+        self._refresh_neighbor_display()
+
+    def _update_mode_explanation(self):
+        """Update the mode explanation label."""
+        mode = self.protocol_combo.currentData()
+        explanations = {
+            "auto": "Shows CDP neighbors. Only shows LLDP if no CDP is found for a device.",
+            "cdp": "Only captures and displays Cisco CDP packets.",
+            "lldp": "Only captures and displays IEEE LLDP packets.",
+            "both": "Shows all discovered neighbors from both protocols.",
+        }
+        self.mode_explanation.setText(explanations.get(mode, ""))
 
     def _setup_neighbors_table(self, parent_layout):
         """Setup the neighbors table."""
@@ -432,37 +500,69 @@ class PortDetectiveWindow(QMainWindow):
     def _on_neighbor_discovered_gui(self, neighbor: DiscoveryNeighbor):
         """Handle neighbor discovered (runs on GUI thread)."""
         key = f"{neighbor.protocol}:{neighbor.local_interface}:{neighbor.device_id}:{neighbor.port_id}"
-        is_new = key not in self.neighbors
         self.neighbors[key] = neighbor
 
-        if is_new:
-            self._add_neighbor_row(neighbor, key)
-        else:
-            self._update_neighbor_row(neighbor, key)
-
-        # Update counts
-        cdp_count = sum(1 for n in self.neighbors.values() if n.protocol == "CDP")
-        lldp_count = sum(1 for n in self.neighbors.values() if n.protocol == "LLDP")
-        self.neighbor_count_label.setText(
-            f"Neighbors: {len(self.neighbors)} (CDP: {cdp_count}, LLDP: {lldp_count})"
-        )
+        # Refresh the display with filtering
+        self._refresh_neighbor_display()
 
         if self.auto_scroll_cb.isChecked():
             self.neighbors_table.scrollToBottom()
 
-    def _add_neighbor_row(self, neighbor: DiscoveryNeighbor, key: str):
-        """Add a new row to the neighbors table."""
-        row = self.neighbors_table.rowCount()
-        self.neighbors_table.insertRow(row)
-        self._set_row_data(row, neighbor, key)
+    def _should_display_neighbor(self, neighbor: DiscoveryNeighbor) -> bool:
+        """Determine if a neighbor should be displayed based on protocol mode."""
+        mode = self.protocol_mode
 
-    def _update_neighbor_row(self, neighbor: DiscoveryNeighbor, key: str):
-        """Update an existing row in the neighbors table."""
-        for row in range(self.neighbors_table.rowCount()):
-            item = self.neighbors_table.item(row, 0)
-            if item and item.data(Qt.ItemDataRole.UserRole) == key:
-                self._set_row_data(row, neighbor, key)
-                break
+        if mode == "both":
+            return True
+        elif mode == "cdp":
+            return neighbor.protocol == "CDP"
+        elif mode == "lldp":
+            return neighbor.protocol == "LLDP"
+        elif mode == "auto":
+            # In auto mode, show CDP. Only show LLDP if no CDP exists for this device/interface
+            if neighbor.protocol == "CDP":
+                return True
+            else:
+                # Check if there's a CDP neighbor for the same device on the same local interface
+                for key, other in self.neighbors.items():
+                    if (other.protocol == "CDP" and
+                        other.device_id == neighbor.device_id and
+                        other.local_interface == neighbor.local_interface):
+                        return False  # CDP exists, hide LLDP
+                return True  # No CDP found, show LLDP
+
+        return True
+
+    def _refresh_neighbor_display(self):
+        """Refresh the neighbor table based on current filter settings."""
+        self.neighbors_table.setRowCount(0)
+
+        # Filter and display neighbors
+        displayed_neighbors = []
+        for key, neighbor in self.neighbors.items():
+            if self._should_display_neighbor(neighbor):
+                displayed_neighbors.append((key, neighbor))
+
+        for key, neighbor in displayed_neighbors:
+            row = self.neighbors_table.rowCount()
+            self.neighbors_table.insertRow(row)
+            self._set_row_data(row, neighbor, key)
+
+        # Update counts (show both total and filtered)
+        total_cdp = sum(1 for n in self.neighbors.values() if n.protocol == "CDP")
+        total_lldp = sum(1 for n in self.neighbors.values() if n.protocol == "LLDP")
+        displayed_cdp = sum(1 for _, n in displayed_neighbors if n.protocol == "CDP")
+        displayed_lldp = sum(1 for _, n in displayed_neighbors if n.protocol == "LLDP")
+
+        if self.protocol_mode == "both":
+            self.neighbor_count_label.setText(
+                f"Neighbors: {len(displayed_neighbors)} (CDP: {displayed_cdp}, LLDP: {displayed_lldp})"
+            )
+        else:
+            self.neighbor_count_label.setText(
+                f"Showing: {len(displayed_neighbors)} (CDP: {displayed_cdp}, LLDP: {displayed_lldp}) | "
+                f"Total captured: {len(self.neighbors)}"
+            )
 
     def _set_row_data(self, row: int, neighbor: DiscoveryNeighbor, key: str):
         """Set data for a table row."""
@@ -492,15 +592,33 @@ class PortDetectiveWindow(QMainWindow):
             f"{neighbor.ttl}s",
         ]
 
+        # Determine if we're in dark mode by checking the palette
+        app = QApplication.instance()
+        is_dark_mode = app.palette().color(QPalette.ColorRole.Window).lightness() < 128
+
         for col, text in enumerate(items):
             item = QTableWidgetItem(str(text))
             if col == 0:
                 item.setData(Qt.ItemDataRole.UserRole, key)
-                # Color code by protocol
-                if neighbor.protocol == "CDP":
-                    item.setBackground(QColor("#e3f2fd"))  # Light blue
+
+            # Color code by protocol - use colors that work in both light and dark mode
+            if neighbor.protocol == "CDP":
+                if is_dark_mode:
+                    # Dark mode: use blue text
+                    item.setForeground(QColor("#64B5F6"))  # Light blue text
                 else:
-                    item.setBackground(QColor("#e8f5e9"))  # Light green
+                    # Light mode: use dark blue text on light blue background
+                    item.setForeground(QColor("#1565C0"))  # Dark blue text
+                    item.setBackground(QColor("#E3F2FD"))  # Light blue background
+            else:  # LLDP
+                if is_dark_mode:
+                    # Dark mode: use green text
+                    item.setForeground(QColor("#81C784"))  # Light green text
+                else:
+                    # Light mode: use dark green text on light green background
+                    item.setForeground(QColor("#2E7D32"))  # Dark green text
+                    item.setBackground(QColor("#E8F5E9"))  # Light green background
+
             self.neighbors_table.setItem(row, col, item)
 
     def _on_neighbor_selected(self):
