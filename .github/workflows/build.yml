@@ -178,20 +178,30 @@ jobs:
 
       - name: Build Linux executable
         run: |
-          pyinstaller --onefile --name "portdetective" --add-data "icon.png:." --add-data "README.md:." --hidden-import "scapy.layers.l2" --hidden-import "scapy.contrib.cdp" --hidden-import "scapy.contrib.lldp" --hidden-import "PyQt6.QtCore" --hidden-import "PyQt6.QtWidgets" --hidden-import "PyQt6.QtGui" --collect-all "scapy" main.py
+          pyinstaller --onefile --name "portdetective-bin" --add-data "icon.png:." --add-data "README.md:." --hidden-import "scapy.layers.l2" --hidden-import "scapy.contrib.cdp" --hidden-import "scapy.contrib.lldp" --hidden-import "PyQt6.QtCore" --hidden-import "PyQt6.QtWidgets" --hidden-import "PyQt6.QtGui" --collect-all "scapy" main.py
 
       - name: Create DEB package
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           DEB_VERSION="${{ steps.version.outputs.deb_version }}"
-          
+
           mkdir -p portdetective_${DEB_VERSION}/DEBIAN
           mkdir -p portdetective_${DEB_VERSION}/usr/bin
           mkdir -p portdetective_${DEB_VERSION}/usr/share/applications
           mkdir -p portdetective_${DEB_VERSION}/usr/share/icons/hicolor/256x256/apps
+          mkdir -p portdetective_${DEB_VERSION}/usr/share/polkit-1/actions
 
-          cp dist/portdetective portdetective_${DEB_VERSION}/usr/bin/
+          # Install the actual binary
+          cp dist/portdetective-bin portdetective_${DEB_VERSION}/usr/bin/
+          chmod 755 portdetective_${DEB_VERSION}/usr/bin/portdetective-bin
+          
+          # Install the launcher script that handles sudo/pkexec
+          cp linux_launcher.sh portdetective_${DEB_VERSION}/usr/bin/portdetective
           chmod 755 portdetective_${DEB_VERSION}/usr/bin/portdetective
+          
+          # Install PolicyKit policy for nice GUI sudo prompt
+          cp com.portdetective.policy portdetective_${DEB_VERSION}/usr/share/polkit-1/actions/
+          
           cp icon.png portdetective_${DEB_VERSION}/usr/share/icons/hicolor/256x256/apps/portdetective.png
 
           cat > portdetective_${DEB_VERSION}/DEBIAN/control << EOF
@@ -200,11 +210,12 @@ jobs:
           Section: net
           Priority: optional
           Architecture: amd64
-          Depends: libpcap0.8
+          Depends: libpcap0.8, libxcb-cursor0, libxcb-xinerama0, libxkbcommon-x11-0, libegl1, policykit-1
           Maintainer: PortDetective
           Description: CDP and LLDP Discovery Protocol Monitor
            A cross-platform GUI application for discovering network neighbors
            using Cisco Discovery Protocol (CDP) and Link Layer Discovery Protocol (LLDP).
+           Automatically prompts for administrator privileges when launched.
           EOF
 
           cat > portdetective_${DEB_VERSION}/usr/share/applications/portdetective.desktop << EOF
@@ -219,9 +230,9 @@ jobs:
           EOF
 
           dpkg-deb --build portdetective_${DEB_VERSION}
-          
+
           # Rename outputs with version
-          mv dist/portdetective "dist/PortDetective-Ubuntu-${VERSION}"
+          mv dist/portdetective-bin "dist/PortDetective-Ubuntu-${VERSION}"
           mv portdetective_${DEB_VERSION}.deb "dist/PortDetective-Ubuntu-${VERSION}.deb"
 
       - name: Upload Linux artifacts

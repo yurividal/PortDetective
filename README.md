@@ -50,35 +50,45 @@ A cross-platform application for listening to **Cisco Discovery Protocol (CDP)**
 ### Packet Capture Library (Required on all systems)
 The application uses system-level packet capture drivers that cannot be bundled:
 - **Windows**: [Npcap](https://npcap.com/) (install with WinPcap API-compatible mode) - the Windows installer will prompt you to download this if not detected
-- **Linux**: libpcap (`sudo apt install libpcap0.8`) - automatically installed with .deb package
+- **Linux**: libpcap and Qt dependencies - automatically installed with .deb package
 - **macOS**: libpcap (pre-installed, no action needed)
 
 ## Installation
 
 ### Windows (Recommended)
-1. Download `PortDetective-Setup.exe` from the [Releases](https://github.com/yurividal/PortDetective/releases) page
+1. Download `PortDetective-Windows-vX.X.X-Setup.exe` from the [Releases](https://github.com/yurividal/PortDetective/releases) page
 2. Run the installer
 3. If Npcap is not installed, the installer will prompt you to download it
 4. Choose whether to create Start Menu and Desktop shortcuts
 5. Launch PortDetective from the Start Menu or Desktop
 
 ### Windows (Portable)
-Download `PortDetective.exe` for a standalone executable that doesn't require installation.
+Download `PortDetective-Windows-vX.X.X.exe` for a standalone executable that doesn't require installation.
 
 ### macOS
-1. Download `PortDetective-macOS.dmg` from the [Releases](https://github.com/yurividal/PortDetective/releases) page
+1. Download `PortDetective-macOS-vX.X.X.dmg` from the [Releases](https://github.com/yurividal/PortDetective/releases) page
 2. Open the DMG and drag PortDetective to Applications
 3. Run with `sudo` or grant admin privileges when prompted
 
-### Linux
-Download the `.deb` package or standalone binary from the [Releases](https://github.com/yurividal/PortDetective/releases) page.
+### Linux (Recommended)
+Download the `.deb` package from the [Releases](https://github.com/yurividal/PortDetective/releases) page.
 ```bash
-# Install .deb package (includes libpcap dependency)
-sudo dpkg -i portdetective_1.0.0.deb
+# Install .deb package (automatically installs all dependencies)
+sudo dpkg -i PortDetective-Ubuntu-vX.X.X.deb
+sudo apt-get install -f  # Install any missing dependencies
 
-# Or run standalone binary
-chmod +x portdetective
-sudo ./portdetective
+# Run (requires root for packet capture)
+sudo portdetective
+```
+
+### Linux (Standalone Binary)
+```bash
+# Install required dependencies first
+sudo apt-get install libpcap0.8 libxcb-cursor0 libxcb-xinerama0 libxkbcommon-x11-0 libegl1
+
+# Download and run
+chmod +x PortDetective-Ubuntu-vX.X.X
+sudo ./PortDetective-Ubuntu-vX.X.X
 ```
 
 ## Building from Source
