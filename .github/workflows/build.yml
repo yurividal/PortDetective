@@ -1,0 +1,181 @@
+name: Build PortDetective
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller pillow
+
+      - name: Convert icon to ICO
+        run: |
+          python -c "from PIL import Image; img = Image.open('icon.png'); img.save('icon.ico', format='ICO', sizes=[(16,16), (32,32), (48,48), (64,64), (128,128), (256,256)])"
+
+      - name: Build Windows executable
+        run: |
+          pyinstaller --onefile --windowed --name "PortDetective" --icon "icon.ico" --add-data "icon.png;." --add-data "README.md;." --hidden-import "scapy.layers.l2" --hidden-import "scapy.contrib.cdp" --hidden-import "scapy.contrib.lldp" --hidden-import "PyQt6.QtCore" --hidden-import "PyQt6.QtWidgets" --hidden-import "PyQt6.QtGui" --collect-all "scapy" main.py
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PortDetective-Windows
+          path: dist/PortDetective.exe
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller pillow
+
+      - name: Create macOS icon
+        run: |
+          mkdir -p icon.iconset
+          sips -z 16 16     icon.png --out icon.iconset/icon_16x16.png
+          sips -z 32 32     icon.png --out icon.iconset/icon_16x16@2x.png
+          sips -z 32 32     icon.png --out icon.iconset/icon_32x32.png
+          sips -z 64 64     icon.png --out icon.iconset/icon_32x32@2x.png
+          sips -z 128 128   icon.png --out icon.iconset/icon_128x128.png
+          sips -z 256 256   icon.png --out icon.iconset/icon_128x128@2x.png
+          sips -z 256 256   icon.png --out icon.iconset/icon_256x256.png
+          sips -z 512 512   icon.png --out icon.iconset/icon_256x256@2x.png
+          sips -z 512 512   icon.png --out icon.iconset/icon_512x512.png
+          sips -z 1024 1024 icon.png --out icon.iconset/icon_512x512@2x.png
+          iconutil -c icns icon.iconset -o icon.icns
+
+      - name: Build macOS application
+        run: |
+          pyinstaller --onefile --windowed --name "PortDetective" --osx-bundle-identifier "com.portdetective.app" --icon "icon.icns" --add-data "icon.png:." --add-data "README.md:." --hidden-import "scapy.layers.l2" --hidden-import "scapy.contrib.cdp" --hidden-import "scapy.contrib.lldp" --hidden-import "PyQt6.QtCore" --hidden-import "PyQt6.QtWidgets" --hidden-import "PyQt6.QtGui" --collect-all "scapy" main.py
+
+      - name: Create DMG
+        run: |
+          mkdir -p dist/dmg_contents
+          cp -R dist/PortDetective.app dist/dmg_contents/
+          ln -s /Applications dist/dmg_contents/Applications
+          hdiutil create -volname "PortDetective" -srcfolder dist/dmg_contents -ov -format UDZO dist/PortDetective-macOS.dmg
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PortDetective-macOS
+          path: dist/PortDetective-macOS.dmg
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcap-dev
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Linux executable
+        run: |
+          pyinstaller --onefile --name "portdetective" --add-data "icon.png:." --add-data "README.md:." --hidden-import "scapy.layers.l2" --hidden-import "scapy.contrib.cdp" --hidden-import "scapy.contrib.lldp" --hidden-import "PyQt6.QtCore" --hidden-import "PyQt6.QtWidgets" --hidden-import "PyQt6.QtGui" --collect-all "scapy" main.py
+
+      - name: Create DEB package
+        run: |
+          mkdir -p portdetective_1.0.0/DEBIAN
+          mkdir -p portdetective_1.0.0/usr/bin
+          mkdir -p portdetective_1.0.0/usr/share/applications
+          mkdir -p portdetective_1.0.0/usr/share/icons/hicolor/256x256/apps
+          
+          cp dist/portdetective portdetective_1.0.0/usr/bin/
+          chmod 755 portdetective_1.0.0/usr/bin/portdetective
+          cp icon.png portdetective_1.0.0/usr/share/icons/hicolor/256x256/apps/portdetective.png
+          
+          cat > portdetective_1.0.0/DEBIAN/control << EOF
+          Package: portdetective
+          Version: 1.0.0
+          Section: net
+          Priority: optional
+          Architecture: amd64
+          Depends: libpcap0.8
+          Maintainer: PortDetective
+          Description: CDP and LLDP Discovery Protocol Monitor
+          EOF
+          
+          cat > portdetective_1.0.0/usr/share/applications/portdetective.desktop << EOF
+          [Desktop Entry]
+          Name=PortDetective
+          Comment=CDP and LLDP Discovery Protocol Monitor
+          Exec=portdetective
+          Icon=portdetective
+          Terminal=false
+          Type=Application
+          Categories=Network;Monitor;
+          EOF
+          
+          dpkg-deb --build portdetective_1.0.0
+          mv portdetective_1.0.0.deb dist/
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PortDetective-Linux
+          path: |
+            dist/portdetective
+            dist/portdetective_1.0.0.deb
+
+  release:
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            PortDetective-Windows/PortDetective.exe
+            PortDetective-macOS/PortDetective-macOS.dmg
+            PortDetective-Linux/portdetective
+            PortDetective-Linux/portdetective_1.0.0.deb
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
