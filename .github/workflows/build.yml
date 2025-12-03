@@ -48,9 +48,13 @@ jobs:
         run: |
           python -c "from PIL import Image; img = Image.open('icon.png'); img.save('icon.ico', format='ICO', sizes=[(16,16), (32,32), (48,48), (64,64), (128,128), (256,256)])"
 
-      - name: Build Windows executable
+      - name: Build Windows executable (onedir for installer - fast startup)
         run: |
-          pyinstaller --onefile --windowed --name "PortDetective" --icon "icon.ico" --add-data "icon.png;." --add-data "README.md;." --hidden-import "scapy.layers.l2" --hidden-import "scapy.contrib.cdp" --hidden-import "scapy.contrib.lldp" --hidden-import "PyQt6.QtCore" --hidden-import "PyQt6.QtWidgets" --hidden-import "PyQt6.QtGui" --collect-all "scapy" main.py
+          pyinstaller --onedir --windowed --name "PortDetective" --icon "icon.ico" --add-data "icon.png;." --add-data "README.md;." --hidden-import "scapy.layers.l2" --hidden-import "scapy.contrib.cdp" --hidden-import "scapy.contrib.lldp" --hidden-import "PyQt6.QtCore" --hidden-import "PyQt6.QtWidgets" --hidden-import "PyQt6.QtGui" --collect-all "scapy" main.py
+
+      - name: Build Windows portable (onefile - single exe, slower startup)
+        run: |
+          pyinstaller --onefile --windowed --name "PortDetective-Portable" --icon "icon.ico" --add-data "icon.png;." --add-data "README.md;." --hidden-import "scapy.layers.l2" --hidden-import "scapy.contrib.cdp" --hidden-import "scapy.contrib.lldp" --hidden-import "PyQt6.QtCore" --hidden-import "PyQt6.QtWidgets" --hidden-import "PyQt6.QtGui" --collect-all "scapy" main.py
 
       - name: Install Inno Setup
         run: |
@@ -70,14 +74,16 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          Move-Item "dist/PortDetective.exe" "dist/PortDetective-Windows-${version}.exe"
+          Move-Item "dist/PortDetective-Portable.exe" "dist/PortDetective-Windows-${version}-Portable.exe"
           Move-Item "dist/PortDetective-Setup.exe" "dist/PortDetective-Windows-${version}-Setup.exe"
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: PortDetective-Windows
-          path: dist/PortDetective-Windows-*
+          path: |
+            dist/PortDetective-Windows-*-Setup.exe
+            dist/PortDetective-Windows-*-Portable.exe
 
   build-macos:
     runs-on: macos-latest
@@ -194,14 +200,14 @@ jobs:
           # Install the actual binary
           cp dist/portdetective-bin portdetective_${DEB_VERSION}/usr/bin/
           chmod 755 portdetective_${DEB_VERSION}/usr/bin/portdetective-bin
-          
+
           # Install the launcher script that handles sudo/pkexec
           cp linux_launcher.sh portdetective_${DEB_VERSION}/usr/bin/portdetective
           chmod 755 portdetective_${DEB_VERSION}/usr/bin/portdetective
-          
+
           # Install PolicyKit policy for nice GUI sudo prompt
           cp com.portdetective.policy portdetective_${DEB_VERSION}/usr/share/polkit-1/actions/
-          
+
           cp icon.png portdetective_${DEB_VERSION}/usr/share/icons/hicolor/256x256/apps/portdetective.png
 
           cat > portdetective_${DEB_VERSION}/DEBIAN/control << EOF

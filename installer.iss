@@ -51,8 +51,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "startmenuicon"; Description: "Create a Start Menu shortcut"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
 
 [Files]
-; Main executable
-Source: "dist\PortDetective.exe"; DestDir: "{app}"; Flags: ignoreversion
+; Main application folder (onedir build for fast startup)
+Source: "dist\PortDetective\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Icon file for shortcuts
 Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 ; README
