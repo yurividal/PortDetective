@@ -11,12 +11,27 @@ on:
 permissions:
   contents: write
 
+env:
+  APP_NAME: PortDetective
+
 jobs:
   build-windows:
     runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="dev-${{ github.sha }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -41,23 +56,45 @@ jobs:
         run: |
           choco install innosetup -y
 
+      - name: Update installer version
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}".TrimStart('v')
+          (Get-Content installer.iss) -replace '#define MyAppVersion "1.0.0"', "#define MyAppVersion `"$version`"" | Set-Content installer.iss
+
       - name: Build Windows Installer
         run: |
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer.iss
+
+      - name: Rename artifacts with version
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          Move-Item "dist/PortDetective.exe" "dist/PortDetective-Windows-${version}.exe"
+          Move-Item "dist/PortDetective-Setup.exe" "dist/PortDetective-Windows-${version}-Setup.exe"
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: PortDetective-Windows
-          path: |
-            dist/PortDetective.exe
-            dist/PortDetective-Setup.exe
+          path: dist/PortDetective-Windows-*
 
   build-macos:
     runs-on: macos-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="dev-${{ github.sha }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -91,22 +128,37 @@ jobs:
 
       - name: Create DMG
         run: |
+          VERSION="${{ steps.version.outputs.version }}"
           mkdir -p dist/dmg_contents
           cp -R dist/PortDetective.app dist/dmg_contents/
           ln -s /Applications dist/dmg_contents/Applications
-          hdiutil create -volname "PortDetective" -srcfolder dist/dmg_contents -ov -format UDZO dist/PortDetective-macOS.dmg
+          hdiutil create -volname "PortDetective" -srcfolder dist/dmg_contents -ov -format UDZO "dist/PortDetective-macOS-${VERSION}.dmg"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: PortDetective-macOS
-          path: dist/PortDetective-macOS.dmg
+          path: dist/PortDetective-macOS-*.dmg
 
   build-linux:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            DEB_VERSION="${VERSION#v}"
+          else
+            VERSION="dev-${{ github.sha }}"
+            DEB_VERSION="0.0.0"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "deb_version=$DEB_VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (deb: $DEB_VERSION)"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -130,27 +182,32 @@ jobs:
 
       - name: Create DEB package
         run: |
-          mkdir -p portdetective_1.0.0/DEBIAN
-          mkdir -p portdetective_1.0.0/usr/bin
-          mkdir -p portdetective_1.0.0/usr/share/applications
-          mkdir -p portdetective_1.0.0/usr/share/icons/hicolor/256x256/apps
+          VERSION="${{ steps.version.outputs.version }}"
+          DEB_VERSION="${{ steps.version.outputs.deb_version }}"
+          
+          mkdir -p portdetective_${DEB_VERSION}/DEBIAN
+          mkdir -p portdetective_${DEB_VERSION}/usr/bin
+          mkdir -p portdetective_${DEB_VERSION}/usr/share/applications
+          mkdir -p portdetective_${DEB_VERSION}/usr/share/icons/hicolor/256x256/apps
 
-          cp dist/portdetective portdetective_1.0.0/usr/bin/
-          chmod 755 portdetective_1.0.0/usr/bin/portdetective
-          cp icon.png portdetective_1.0.0/usr/share/icons/hicolor/256x256/apps/portdetective.png
+          cp dist/portdetective portdetective_${DEB_VERSION}/usr/bin/
+          chmod 755 portdetective_${DEB_VERSION}/usr/bin/portdetective
+          cp icon.png portdetective_${DEB_VERSION}/usr/share/icons/hicolor/256x256/apps/portdetective.png
 
-          cat > portdetective_1.0.0/DEBIAN/control << EOF
+          cat > portdetective_${DEB_VERSION}/DEBIAN/control << EOF
           Package: portdetective
-          Version: 1.0.0
+          Version: ${DEB_VERSION}
           Section: net
           Priority: optional
           Architecture: amd64
           Depends: libpcap0.8
           Maintainer: PortDetective
           Description: CDP and LLDP Discovery Protocol Monitor
+           A cross-platform GUI application for discovering network neighbors
+           using Cisco Discovery Protocol (CDP) and Link Layer Discovery Protocol (LLDP).
           EOF
 
-          cat > portdetective_1.0.0/usr/share/applications/portdetective.desktop << EOF
+          cat > portdetective_${DEB_VERSION}/usr/share/applications/portdetective.desktop << EOF
           [Desktop Entry]
           Name=PortDetective
           Comment=CDP and LLDP Discovery Protocol Monitor
@@ -161,16 +218,18 @@ jobs:
           Categories=Network;Monitor;
           EOF
 
-          dpkg-deb --build portdetective_1.0.0
-          mv portdetective_1.0.0.deb dist/
+          dpkg-deb --build portdetective_${DEB_VERSION}
+          
+          # Rename outputs with version
+          mv dist/portdetective "dist/PortDetective-Ubuntu-${VERSION}"
+          mv portdetective_${DEB_VERSION}.deb "dist/PortDetective-Ubuntu-${VERSION}.deb"
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: PortDetective-Linux
           path: |
-            dist/portdetective
-            dist/portdetective_1.0.0.deb
+            dist/PortDetective-Ubuntu-*
 
   release:
     needs: [build-windows, build-macos, build-linux]
@@ -180,16 +239,20 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
 
+      - name: List artifacts
+        run: |
+          echo "=== All downloaded artifacts ==="
+          find . -type f -name "PortDetective-*" | sort
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            PortDetective-Windows/PortDetective-Setup.exe
-            PortDetective-Windows/PortDetective.exe
-            PortDetective-macOS/PortDetective-macOS.dmg
-            PortDetective-Linux/portdetective
-            PortDetective-Linux/portdetective_1.0.0.deb
+            PortDetective-Windows/PortDetective-Windows-*
+            PortDetective-macOS/PortDetective-macOS-*
+            PortDetective-Linux/PortDetective-Ubuntu-*
           draft: false
           prerelease: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -525,9 +525,11 @@ class PortDetectiveWindow(QMainWindow):
             else:
                 # Check if there's a CDP neighbor for the same device on the same local interface
                 for key, other in self.neighbors.items():
-                    if (other.protocol == "CDP" and
-                        other.device_id == neighbor.device_id and
-                        other.local_interface == neighbor.local_interface):
+                    if (
+                        other.protocol == "CDP"
+                        and other.device_id == neighbor.device_id
+                        and other.local_interface == neighbor.local_interface
+                    ):
                         return False  # CDP exists, hide LLDP
                 return True  # No CDP found, show LLDP
 
