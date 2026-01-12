@@ -103,6 +103,9 @@ class PortDetectiveWindow(QMainWindow):
         # Protocol mode setting: "auto", "cdp", "lldp", "both"
         self.protocol_mode = "auto"
 
+        # Interface filtering
+        self.show_all_interfaces = False
+
         # Setup UI
         self._setup_ui()
         self._load_interfaces()
@@ -198,6 +201,15 @@ class PortDetectiveWindow(QMainWindow):
         h_layout.addLayout(btn_layout, stretch=1)
         interface_layout.addLayout(h_layout)
 
+        # Show all interfaces checkbox
+        self.show_all_cb = QCheckBox("Show virtual/tunnel adapters")
+        self.show_all_cb.setToolTip(
+            "Show all interfaces including tunnels, VPNs, virtual adapters, etc."
+        )
+        self.show_all_cb.setChecked(False)
+        self.show_all_cb.stateChanged.connect(self._on_show_all_changed)
+        interface_layout.addWidget(self.show_all_cb)
+
         parent_layout.addWidget(interface_group, stretch=2)
 
     def _setup_settings_section(self, parent_layout):
@@ -289,7 +301,7 @@ class PortDetectiveWindow(QMainWindow):
 
         # Table with protocol column
         self.neighbors_table = QTableWidget()
-        self.neighbors_table.setColumnCount(11)
+        self.neighbors_table.setColumnCount(12)
         self.neighbors_table.setHorizontalHeaderLabels(
             [
                 "Protocol",
@@ -303,6 +315,7 @@ class PortDetectiveWindow(QMainWindow):
                 "Local Speed",
                 "Last Seen",
                 "TTL",
+                "Copy",
             ]
         )
 
@@ -329,6 +342,8 @@ class PortDetectiveWindow(QMainWindow):
         header.setSectionResizeMode(8, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(9, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(10, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(11, QHeaderView.ResizeMode.Fixed)  # Copy button
+        header.resizeSection(11, 60)  # Fixed width for copy button
 
         self.neighbors_table.itemSelectionChanged.connect(self._on_neighbor_selected)
 
@@ -384,6 +399,67 @@ class PortDetectiveWindow(QMainWindow):
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
 
+    def _on_show_all_changed(self):
+        """Handle show all interfaces checkbox change."""
+        self.show_all_interfaces = self.show_all_cb.isChecked()
+        self._load_interfaces()
+
+    def _is_likely_virtual(self, iface: NetworkInterface) -> bool:
+        """Determine if an interface is likely a virtual/tunnel adapter."""
+        if iface.is_loopback:
+            return True
+
+        # Common keywords in virtual/tunnel adapter names
+        virtual_keywords = [
+            "tunnel",
+            "vpn",
+            "virtual",
+            "vmware",
+            "vbox",
+            "hyper-v",
+            "vethernet",
+            "bridge",
+            "tap",
+            "tun",
+            "docker",
+            "vnic",
+            "loopback",
+            "isatap",
+            "teredo",
+            "6to4",
+            "pseudo",
+            "wsl",
+            "npcap",
+            "packet",
+            "bluetooth",
+            "pan network",
+            # macOS-specific virtual interfaces
+            "utun",      # macOS tunnel interfaces
+            "awdl",      # Apple Wireless Direct Link
+            "llw",       # Low Latency WLAN
+            "gif",       # Generic tunnel interface (IPv6)
+            "stf",       # 6to4 tunnel
+            "ap",        # Access Point mode
+            "p2p",       # Peer-to-peer
+        ]
+
+        # Check both system name and display name (case insensitive)
+        name_lower = iface.name.lower()
+        display_lower = iface.display_name.lower()
+        
+        # Additional check: macOS interface names that start with specific prefixes
+        if name_lower.startswith(('utun', 'awdl', 'llw', 'gif', 'stf', 'bridge')):\n            return True
+
+        for keyword in virtual_keywords:
+            if keyword in name_lower or keyword in display_lower:
+                return True
+
+        # Check if interface has no MAC address (common for tunnels)
+        if not iface.mac_address or iface.mac_address == "00:00:00:00:00:00":
+            return True
+
+        return False
+
     def _load_interfaces(self):
         """Load available network interfaces."""
         self.interface_list.clear()
@@ -391,10 +467,22 @@ class PortDetectiveWindow(QMainWindow):
 
         try:
             all_interfaces = self.nic_detector.get_all_interfaces()
+            displayed_count = 0
+            hidden_count = 0
 
             for iface in all_interfaces:
+                # Filter virtual interfaces unless show_all is checked
+                is_virtual = self._is_likely_virtual(iface)
+                if is_virtual and not self.show_all_interfaces:
+                    hidden_count += 1
+                    continue
+
+                displayed_count += 1
                 status = "🟢" if iface.is_up else "🔴"
                 loopback = " (Loopback)" if iface.is_loopback else ""
+                virtual_label = (
+                    " (Virtual)" if is_virtual and not iface.is_loopback else ""
+                )
                 ips = (
                     ", ".join(iface.ip_addresses[:2]) if iface.ip_addresses else "No IP"
                 )
@@ -404,7 +492,7 @@ class PortDetectiveWindow(QMainWindow):
                     else ""
                 )
 
-                display_text = f"{status} {iface.display_name}{loopback}\n    {ips} {f'[{speed}]' if speed else ''}"
+                display_text = f"{status} {iface.display_name}{loopback}{virtual_label}\n    {ips} {f'[{speed}]' if speed else ''}"
 
                 item = QListWidgetItem(display_text)
                 item.setData(Qt.ItemDataRole.UserRole, iface.name)
@@ -416,9 +504,10 @@ class PortDetectiveWindow(QMainWindow):
                 self.interface_list.addItem(item)
                 self.interfaces[iface.name] = iface
 
-            self.status_bar.showMessage(
-                f"Found {len(all_interfaces)} network interfaces"
-            )
+            status_msg = f"Showing {displayed_count} network interfaces"
+            if hidden_count > 0:
+                status_msg += f" ({hidden_count} virtual/tunnel adapters hidden)"
+            self.status_bar.showMessage(status_msg)
 
         except Exception as e:
             self._show_error(f"Error loading interfaces: {e}")
@@ -623,6 +712,15 @@ class PortDetectiveWindow(QMainWindow):
 
             self.neighbors_table.setItem(row, col, item)
 
+        # Add copy button in the last column
+        copy_btn = QPushButton("📋")
+        copy_btn.setToolTip("Copy neighbor info to clipboard")
+        copy_btn.setMaximumWidth(50)
+        copy_btn.clicked.connect(
+            lambda checked, n=neighbor: self._copy_neighbor_to_clipboard(n)
+        )
+        self.neighbors_table.setCellWidget(row, 11, copy_btn)
+
     def _on_neighbor_selected(self):
         """Handle neighbor selection in table."""
         selected_rows = self.neighbors_table.selectedItems()
@@ -686,6 +784,29 @@ Last Seen: {neighbor.last_seen.strftime('%Y-%m-%d %H:%M:%S')}
         for k, value in neighbor.to_dict().items():
             raw_text += f"{k}: {value}\n"
         self.raw_info.setPlainText(raw_text)
+
+    def _copy_neighbor_to_clipboard(self, neighbor: DiscoveryNeighbor):
+        """Copy neighbor information to clipboard in formatted text."""
+        # Get IP address
+        ip_display = neighbor.get_display_ip()
+
+        # Get VLAN info
+        vlan_display = str(neighbor.native_vlan) if neighbor.native_vlan else "N/A"
+
+        # Format the clipboard text
+        clipboard_text = f"""Switch: {neighbor.device_id}
+Switch IP: {ip_display}
+Port: {neighbor.port_id}
+Current VLAN: {vlan_display}"""
+
+        # Copy to clipboard
+        clipboard = QApplication.clipboard()
+        clipboard.setText(clipboard_text)
+
+        # Show brief confirmation in status bar
+        self.status_bar.showMessage(
+            f"Copied info for {neighbor.device_id} to clipboard", 2000
+        )
 
     def _clear_results(self):
         """Clear all results."""
