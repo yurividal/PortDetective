@@ -448,7 +448,8 @@ class PortDetectiveWindow(QMainWindow):
         display_lower = iface.display_name.lower()
         
         # Additional check: macOS interface names that start with specific prefixes
-        if name_lower.startswith(('utun', 'awdl', 'llw', 'gif', 'stf', 'bridge')):\n            return True
+        if name_lower.startswith(('utun', 'awdl', 'llw', 'gif', 'stf', 'bridge')):
+            return True
 
         for keyword in virtual_keywords:
             if keyword in name_lower or keyword in display_lower:
