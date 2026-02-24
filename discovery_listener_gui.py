@@ -991,7 +991,7 @@ def is_system_dark_mode() -> bool:
 
 
 def apply_dark_palette(app: QApplication) -> None:
-    """Apply a dark QPalette to the application (used on Linux/macOS)."""
+    """Apply a dark QPalette and stylesheet to the application (used on Linux/macOS)."""
     palette = QPalette()
     palette.setColor(QPalette.ColorRole.Window,          QColor(53,  53,  53))
     palette.setColor(QPalette.ColorRole.WindowText,      QColor(255, 255, 255))
@@ -1011,6 +1011,34 @@ def apply_dark_palette(app: QApplication) -> None:
         palette.setColor(QPalette.ColorGroup.Disabled, role, QColor(127, 127, 127))
     app.setPalette(palette)
 
+    # QMenuBar doesn't fully inherit QPalette on GNOME/Wayland — force it via stylesheet
+    app.setStyleSheet("""
+        QMenuBar {
+            background-color: #353535;
+            color: #ffffff;
+        }
+        QMenuBar::item:selected {
+            background-color: #2a82da;
+            color: #ffffff;
+        }
+        QMenuBar::item:pressed {
+            background-color: #2a82da;
+        }
+        QMenu {
+            background-color: #353535;
+            color: #ffffff;
+            border: 1px solid #555555;
+        }
+        QMenu::item:selected {
+            background-color: #2a82da;
+            color: #ffffff;
+        }
+        QMenu::separator {
+            height: 1px;
+            background: #555555;
+        }
+    """)
+
 
 def main():
     """Main entry point."""
@@ -1018,6 +1046,16 @@ def main():
     app.setApplicationName("portdetective")
     app.setDesktopFileName("portdetective")
     app.setStyle("Fusion")
+
+    # On GNOME Wayland, Qt6 CSD/decoration negotiation often fails, resulting in
+    # a window with no close/minimize/maximize buttons.  Force XWayland (xcb) so
+    # the compositor always provides server-side decorations.
+    # We do this by restarting under xcb if we're currently on the wayland plugin.
+    if sys.platform not in ("win32", "darwin"):
+        platform = app.platformName()
+        if platform == "wayland":
+            os.environ["QT_QPA_PLATFORM"] = "xcb"
+            os.execv(sys.executable, [sys.executable] + sys.argv)
 
     # On Linux/macOS, Qt does not automatically apply the system dark-mode
     # palette when the Fusion style is active — detect and apply it manually.
