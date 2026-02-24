@@ -8,15 +8,15 @@ echo "========================================"
 echo "PortDetective - Linux Build Script"
 echo "========================================"
 
-# Configuration
-APP_NAME="portdetective"
-APP_VERSION="1.0.0"
-MAINTAINER="PortDetective <portdetective@example.com>"
-DESCRIPTION="A cross-platform GUI application for listening to CDP and LLDP discovery protocol packets"
-
-# Get script directory
+# Get script directory first (needed for version lookup)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
+# Configuration
+APP_NAME="portdetective"
+APP_VERSION=$(python3 -c "import sys; sys.path.insert(0, '$SCRIPT_DIR'); from version import APP_VERSION; print(APP_VERSION)")
+MAINTAINER="PortDetective <portdetective@example.com>"
+DESCRIPTION="A cross-platform GUI application for listening to CDP and LLDP discovery protocol packets"
 
 # Check if running on Linux
 if [[ "$(uname)" != "Linux" ]]; then
@@ -174,8 +174,8 @@ echo "PortDetective installed successfully!"
 echo ""
 echo "You can run it from the application menu or with: portdetective"
 echo ""
-echo "Note: If packet capture doesn't work, run with sudo:"
-echo "  sudo portdetective"
+echo "Note: If this is a source install, run once to enable capture without root:"
+echo "  sudo bash /usr/share/portdetective/setup_caps.sh"
 echo ""
 
 exit 0
@@ -192,7 +192,8 @@ Icon=portdetective
 Terminal=false
 Type=Application
 Categories=Network;Monitor;System;
-Keywords=CDP;LLDP;Cisco;Network;Discovery;
+Keywords=CDP;LLDP;Cisco;network;discovery;neighbor;protocol;
+StartupWMClass=portdetective
 EOF
 
 # Create a simple icon (placeholder - you can replace with a real icon)

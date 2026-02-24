@@ -12,7 +12,7 @@ import platform
 
 
 APP_NAME = "PortDetective"
-APP_VERSION = "1.0.0"
+from version import APP_VERSION  # single source of truth
 
 
 def get_platform():
@@ -406,6 +406,31 @@ Description: CDP and LLDP Discovery Protocol Monitor
 """
             )
 
+        # Create postinst: grant raw-socket capabilities so no root is needed
+        postinst_path = f"{deb_dir}/DEBIAN/postinst"
+        with open(postinst_path, "w") as f:
+            f.write(
+                """#!/bin/bash
+set -e
+
+if command -v setcap &> /dev/null; then
+    setcap cap_net_raw,cap_net_admin=eip /usr/bin/portdetective || true
+fi
+
+if command -v update-desktop-database &> /dev/null; then
+    update-desktop-database /usr/share/applications || true
+fi
+
+echo ""
+echo "PortDetective installed successfully!"
+echo "Run it from the application menu or with: portdetective"
+echo ""
+
+exit 0
+"""
+            )
+        os.chmod(postinst_path, 0o755)
+
         # Create .desktop file
         with open(f"{deb_dir}/usr/share/applications/portdetective.desktop", "w") as f:
             f.write(
@@ -416,8 +441,9 @@ Exec=portdetective
 Icon=portdetective
 Terminal=false
 Type=Application
-Categories=Network;Monitor;
-Keywords=CDP;LLDP;Cisco;Network;Discovery;
+Categories=Network;Monitor;System;
+Keywords=CDP;LLDP;Cisco;network;discovery;neighbor;protocol;
+StartupWMClass=portdetective
 """
             )
 

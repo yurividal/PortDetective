@@ -11,8 +11,8 @@ Requirements:
     - PyQt6
     - Scapy
     - psutil
-    - Administrator/root privileges for packet capture
     - Npcap (Windows) or libpcap (Linux/Mac)
+    - On Linux: run 'sudo bash setup_caps.sh' once to enable capture without root
 """
 
 import sys
@@ -199,16 +199,14 @@ def show_libpcap_error():
 
 
 def check_privileges():
-    """Check if running with appropriate privileges."""
-    if sys.platform == "win32":
-        try:
-            import ctypes
-
-            return ctypes.windll.shell32.IsUserAnAdmin() != 0
-        except:
-            return False
-    else:
-        return os.geteuid() == 0
+    """Check if running with appropriate privileges (Windows only)."""
+    if sys.platform != "win32":
+        return True  # Linux/Mac: handled via setcap on the binary
+    try:
+        import ctypes
+        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+    except:
+        return False
 
 
 def main():
@@ -227,16 +225,12 @@ def main():
             show_libpcap_error()
             sys.exit(1)
 
-    # Check privileges (warn but don't exit)
-    if not check_privileges():
+    # Windows: warn if not running as administrator
+    if sys.platform == "win32" and not check_privileges():
         print("=" * 60)
-        print("WARNING: Not running with administrator/root privileges!")
+        print("WARNING: Not running as Administrator!")
         print("Packet capture may not work without elevated privileges.")
-        print("")
-        if sys.platform == "win32":
-            print("On Windows: Right-click and 'Run as Administrator'")
-        else:
-            print("On Linux/Mac: Run with 'sudo python main.py'")
+        print("Right-click the application and choose 'Run as Administrator'.")
         print("=" * 60)
         print("")
 

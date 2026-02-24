@@ -5,7 +5,7 @@
 ; - Optional Start Menu and Desktop shortcuts
 
 #define MyAppName "PortDetective"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.6.0"
 #define MyAppPublisher "PortDetective"
 #define MyAppURL "https://github.com/yurividal/PortDetective"
 #define MyAppExeName "PortDetective.exe"

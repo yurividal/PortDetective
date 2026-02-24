@@ -37,6 +37,7 @@ from PyQt6.QtGui import QFont, QColor, QIcon, QAction, QPalette
 from nic_detector import NICDetector, NetworkInterface
 from neighbor import DiscoveryNeighbor
 from discovery_capture import MultiInterfaceDiscoveryCapture
+from version import APP_VERSION
 
 
 def get_resource_path(relative_path: str) -> str:
@@ -505,6 +506,9 @@ class PortDetectiveWindow(QMainWindow):
                 self.interface_list.addItem(item)
                 self.interfaces[iface.name] = iface
 
+            # Never auto-select any interface on startup
+            self.interface_list.clearSelection()
+
             status_msg = f"Showing {displayed_count} network interfaces"
             if hidden_count > 0:
                 status_msg += f" ({hidden_count} virtual/tunnel adapters hidden)"
@@ -915,9 +919,9 @@ Current VLAN: {vlan_display}"""
         """Show about dialog."""
         QMessageBox.about(
             self,
-            "About Discovery Listener",
-            """<h2>CDP/LLDP Discovery Listener</h2>
-            <p>Version 1.1</p>
+            "About PortDetective",
+            f"""<h2>PortDetective</h2>
+            <p>Version {APP_VERSION}</p>
             <p>A cross-platform application for listening to network discovery protocol packets.</p>
             <p><b>Supported Protocols:</b></p>
             <ul>
@@ -933,7 +937,6 @@ Current VLAN: {vlan_display}"""
             </ul>
             <p><b>Requirements:</b></p>
             <ul>
-                <li>Administrator/root privileges for packet capture</li>
                 <li>Npcap (Windows) or libpcap (Linux/Mac)</li>
             </ul>
             <p>Built with Python, PyQt6, and Scapy</p>
@@ -955,10 +958,71 @@ Current VLAN: {vlan_display}"""
         event.accept()
 
 
+def is_system_dark_mode() -> bool:
+    """Detect if the system is using dark mode (Linux/macOS only)."""
+    # Method 1: gsettings (GNOME / most modern desktops)
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
+            capture_output=True, text=True, timeout=2,
+        )
+        if "dark" in result.stdout.lower():
+            return True
+    except Exception:
+        pass
+
+    # Method 2: GTK_THEME environment variable
+    if "dark" in os.environ.get("GTK_THEME", "").lower():
+        return True
+
+    # Method 3: KDE / Plasma color scheme file name
+    try:
+        kde_globals = os.path.expanduser("~/.config/kdeglobals")
+        if os.path.exists(kde_globals):
+            with open(kde_globals) as f:
+                content = f.read()
+            if "ColorScheme=Breeze Dark" in content or "ColorScheme=BreezeDark" in content:
+                return True
+    except Exception:
+        pass
+
+    return False
+
+
+def apply_dark_palette(app: QApplication) -> None:
+    """Apply a dark QPalette to the application (used on Linux/macOS)."""
+    palette = QPalette()
+    palette.setColor(QPalette.ColorRole.Window,          QColor(53,  53,  53))
+    palette.setColor(QPalette.ColorRole.WindowText,      QColor(255, 255, 255))
+    palette.setColor(QPalette.ColorRole.Base,            QColor(35,  35,  35))
+    palette.setColor(QPalette.ColorRole.AlternateBase,   QColor(53,  53,  53))
+    palette.setColor(QPalette.ColorRole.ToolTipBase,     QColor(25,  25,  25))
+    palette.setColor(QPalette.ColorRole.ToolTipText,     QColor(255, 255, 255))
+    palette.setColor(QPalette.ColorRole.Text,            QColor(255, 255, 255))
+    palette.setColor(QPalette.ColorRole.Button,          QColor(53,  53,  53))
+    palette.setColor(QPalette.ColorRole.ButtonText,      QColor(255, 255, 255))
+    palette.setColor(QPalette.ColorRole.BrightText,      QColor(255,   0,   0))
+    palette.setColor(QPalette.ColorRole.Link,            QColor(42,  130, 218))
+    palette.setColor(QPalette.ColorRole.Highlight,       QColor(42,  130, 218))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor(35,  35,  35))
+    # Disabled state
+    for role in (QPalette.ColorRole.ButtonText, QPalette.ColorRole.WindowText, QPalette.ColorRole.Text):
+        palette.setColor(QPalette.ColorGroup.Disabled, role, QColor(127, 127, 127))
+    app.setPalette(palette)
+
+
 def main():
     """Main entry point."""
     app = QApplication(sys.argv)
+    app.setApplicationName("portdetective")
+    app.setDesktopFileName("portdetective")
     app.setStyle("Fusion")
+
+    # On Linux/macOS, Qt does not automatically apply the system dark-mode
+    # palette when the Fusion style is active — detect and apply it manually.
+    if sys.platform != "win32" and is_system_dark_mode():
+        apply_dark_palette(app)
 
     # Set application icon
     icon_path = get_icon_path()
