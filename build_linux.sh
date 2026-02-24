@@ -84,6 +84,7 @@ pyinstaller --onefile \
     --hidden-import "PyQt6.QtCore" \
     --hidden-import "PyQt6.QtWidgets" \
     --hidden-import "PyQt6.QtGui" \
+    --exclude-module "scapy.modules.krack" \
     --collect-all "scapy" \
     main.py
 
