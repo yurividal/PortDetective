@@ -213,7 +213,7 @@ jobs:
           Section: net
           Priority: optional
           Architecture: amd64
-          Depends: libpcap0.8, libxcb-cursor0, libxcb-xinerama0, libxkbcommon-x11-0, libegl1, policykit-1
+          Depends: libpcap0.8, libxcb-cursor0, libxcb-xinerama0, libxkbcommon-x11-0, libegl1, policykit-1 | policykit | polkit
           Maintainer: PortDetective
           Description: CDP and LLDP Discovery Protocol Monitor
            A cross-platform GUI application for discovering network neighbors

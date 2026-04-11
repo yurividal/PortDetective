@@ -72,6 +72,8 @@ Download `PortDetective-Windows-vX.X.X.exe` for a standalone executable that doe
 
 ### Linux (Recommended)
 Download the `.deb` package from the [Releases](https://github.com/yurividal/PortDetective/releases) page.
+
+Note: depending on distro/repo naming, the PolicyKit dependency may appear as `policykit-1`, `policykit`, or `polkit`.
 ```bash
 # Install .deb package (automatically installs all dependencies)
 sudo dpkg -i PortDetective-Ubuntu-vX.X.X.deb
