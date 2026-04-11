@@ -5,6 +5,11 @@ All notable changes to PortDetective will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.3] - 2026-04-11
+
+### Fixed
+- Linux .deb dependency compatibility on newer Ubuntu by adding PolicyKit package-name fallbacks (`pkexec`, `polkitd`, `policykit-1`, `policykit`, `polkit`)
+
 ## [1.6.2] - 2026-04-11
 
 ### Fixed
