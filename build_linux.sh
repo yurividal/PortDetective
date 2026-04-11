@@ -151,7 +151,7 @@ Version: $APP_VERSION
 Section: net
 Priority: optional
 Architecture: amd64
-Depends: libpcap0.8, policykit-1 | policykit | polkit
+Depends: libpcap0.8, pkexec | polkitd | policykit-1 | policykit | polkit
 Maintainer: $MAINTAINER
 Description: $DESCRIPTION
  PortDetective is a GUI application that captures and displays
