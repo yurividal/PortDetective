@@ -73,6 +73,8 @@ Download `PortDetective-Windows-vX.X.X.exe` for a standalone executable that doe
 ### Linux (Recommended)
 Download the `.deb` package from the [Releases](https://github.com/yurividal/PortDetective/releases) page.
 
+If you prefer a portable Linux build, use the AppImage package below.
+
 Note: depending on distro/repo naming, the PolicyKit dependency may appear as `pkexec`, `polkitd`, `policykit-1`, `policykit`, or `polkit`.
 ```bash
 # Install .deb package (automatically installs all dependencies)
@@ -82,6 +84,17 @@ sudo apt-get install -f  # Install any missing dependencies
 # Run (requires root for packet capture)
 sudo portdetective
 ```
+
+### Linux (AppImage)
+Download `PortDetective-Linux-vX.X.X-x86_64.AppImage` from the [Releases](https://github.com/yurividal/PortDetective/releases) page.
+
+```bash
+sudo apt-get install libpcap0.8
+chmod +x PortDetective-Linux-vX.X.X-x86_64.AppImage
+./PortDetective-Linux-vX.X.X-x86_64.AppImage
+```
+
+The AppImage will try `pkexec` first for a graphical elevation prompt and falls back to other sudo helpers when available.
 
 ### Linux (Standalone Binary)
 ```bash
@@ -216,7 +229,7 @@ chmod +x build_mac.sh
 ```bash
 chmod +x build_linux.sh
 ./build_linux.sh
-# Output: dist/portdetective and dist/portdetective_1.0.0.deb
+# Output: dist/portdetective, dist/portdetective_1.0.0.deb, and dist/PortDetective-Linux-1.0.0-x86_64.AppImage
 ```
 
 ### Cross-platform (Python)

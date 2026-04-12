@@ -5,6 +5,13 @@ All notable changes to PortDetective will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.4] - 2026-04-12
+
+### Added
+- Support AppImage format for Linux releases
+- Linux AppImage packaging in the local build script and GitHub release workflow
+- Published AppImage artifact on tag builds alongside the existing `.deb` package
+
 ## [1.6.3] - 2026-04-11
 
 ### Fixed

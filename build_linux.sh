@@ -14,9 +14,119 @@ cd "$SCRIPT_DIR"
 
 # Configuration
 APP_NAME="portdetective"
-APP_VERSION=$(python3 -c "import sys; sys.path.insert(0, '$SCRIPT_DIR'); from version import APP_VERSION; print(APP_VERSION)")
+APP_VERSION="${APP_VERSION_OVERRIDE:-$(python3 -c "import sys; sys.path.insert(0, '$SCRIPT_DIR'); from version import APP_VERSION; print(APP_VERSION)")}"
 MAINTAINER="PortDetective <portdetective@example.com>"
 DESCRIPTION="A cross-platform GUI application for listening to CDP and LLDP discovery protocol packets"
+
+get_appimage_arch() {
+    case "$(uname -m)" in
+        x86_64|amd64)
+            echo "x86_64"
+            ;;
+        aarch64|arm64)
+            echo "aarch64"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+download_file() {
+    local url="$1"
+    local output_path="$2"
+
+    if command -v curl &> /dev/null; then
+        curl -fsSL "$url" -o "$output_path"
+        return 0
+    fi
+
+    if command -v wget &> /dev/null; then
+        wget -qO "$output_path" "$url"
+        return 0
+    fi
+
+    echo "Error: curl or wget is required to download AppImage tooling"
+    return 1
+}
+
+create_appimage() {
+    local appimage_arch appimage_build_dir appdir appimagetool_dir appimagetool_path
+    local appimagetool_url desktop_file output_file appimage_size
+
+    echo ""
+    echo "Creating AppImage package..."
+
+    if ! appimage_arch="$(get_appimage_arch)"; then
+        echo "Error: unsupported AppImage architecture: $(uname -m)"
+        return 1
+    fi
+
+    appimage_build_dir=".appimage-build"
+    appdir="$appimage_build_dir/PortDetective.AppDir"
+    appimagetool_dir="$appimage_build_dir/tools"
+    appimagetool_path="$appimagetool_dir/appimagetool-${appimage_arch}.AppImage"
+    appimagetool_url="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${appimage_arch}.AppImage"
+    desktop_file="$appdir/portdetective.desktop"
+    output_file="dist/PortDetective-Linux-${APP_VERSION}-${appimage_arch}.AppImage"
+
+    mkdir -p "$appdir/usr/bin"
+    mkdir -p "$appdir/usr/share/applications"
+    mkdir -p "$appdir/usr/share/doc/$APP_NAME"
+    mkdir -p "$appdir/usr/share/icons/hicolor/256x256/apps"
+    mkdir -p "$appimagetool_dir"
+
+    if [ ! -f "$appimagetool_path" ]; then
+        echo "Downloading appimagetool..."
+        download_file "$appimagetool_url" "$appimagetool_path"
+        chmod 755 "$appimagetool_path"
+    fi
+
+    rm -rf "$appdir"
+    mkdir -p "$appdir/usr/bin"
+    mkdir -p "$appdir/usr/share/applications"
+    mkdir -p "$appdir/usr/share/doc/$APP_NAME"
+    mkdir -p "$appdir/usr/share/icons/hicolor/256x256/apps"
+
+    cp "dist/portdetective" "$appdir/usr/bin/portdetective-bin"
+    chmod 755 "$appdir/usr/bin/portdetective-bin"
+    cp "linux_appimage_apprun.sh" "$appdir/AppRun"
+    chmod 755 "$appdir/AppRun"
+    cp README.md "$appdir/usr/share/doc/$APP_NAME/"
+
+    cat > "$desktop_file" << EOF
+[Desktop Entry]
+Name=PortDetective
+Comment=CDP and LLDP Discovery Protocol Monitor
+Exec=AppRun
+Icon=portdetective
+Terminal=false
+Type=Application
+Categories=Network;Monitor;System;
+Keywords=CDP;LLDP;Cisco;network;discovery;neighbor;protocol;
+StartupWMClass=portdetective
+X-AppImage-Version=$APP_VERSION
+EOF
+    cp "$desktop_file" "$appdir/usr/share/applications/portdetective.desktop"
+
+    if [ -n "$ICON_FILE" ] && [ -f "$ICON_FILE" ]; then
+        cp "$ICON_FILE" "$appdir/portdetective.png"
+        cp "$ICON_FILE" "$appdir/usr/share/icons/hicolor/256x256/apps/portdetective.png"
+        ln -sf "portdetective.png" "$appdir/.DirIcon"
+    fi
+
+    rm -f "$output_file"
+    ARCH="$appimage_arch" "$appimagetool_path" --appimage-extract-and-run "$appdir" "$output_file"
+
+    if [ ! -f "$output_file" ]; then
+        echo "Error: AppImage build failed"
+        return 1
+    fi
+
+    appimage_size=$(du -sh "$output_file" | cut -f1)
+    echo "AppImage created: $output_file"
+    echo "AppImage size: $appimage_size"
+}
 
 # Check if running on Linux
 if [[ "$(uname)" != "Linux" ]]; then
@@ -62,15 +172,21 @@ source venv/bin/activate
 # Install dependencies
 echo ""
 echo "Installing dependencies..."
-pip install --upgrade pip
-pip install -r requirements.txt
-pip install pyinstaller
+if ! python -m pip --version &> /dev/null; then
+    echo "Bootstrapping pip in the virtual environment..."
+    python -m ensurepip --upgrade
+fi
+
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install pyinstaller
 
 # Clean previous builds
 echo ""
 echo "Cleaning previous builds..."
 rm -rf dist build *.spec
 rm -rf "${APP_NAME}_${APP_VERSION}"
+rm -rf .appimage-build
 
 # Build executable with PyInstaller
 echo ""
@@ -254,25 +370,32 @@ dpkg-deb --build "$DEB_DIR"
 # Move .deb to dist folder
 mv "${DEB_DIR}.deb" "dist/"
 
+# Build AppImage package
+create_appimage
+
 # Clean up
 rm -rf "$DEB_DIR"
 
-# Check if .deb was created
+# Check if packages were created
 DEB_FILE="dist/${APP_NAME}_${APP_VERSION}.deb"
-if [ -f "$DEB_FILE" ]; then
+APPIMAGE_FILE=$(find dist -maxdepth 1 -type f -name "PortDetective-Linux-${APP_VERSION}-*.AppImage" | head -n 1)
+if [ -f "$DEB_FILE" ] && [ -n "$APPIMAGE_FILE" ] && [ -f "$APPIMAGE_FILE" ]; then
     echo ""
     echo "========================================"
     echo "Build successful!"
     echo "Executable: dist/portdetective"
     echo "DEB Package: $DEB_FILE"
+    echo "AppImage: $APPIMAGE_FILE"
     echo "========================================"
     
     # Show file sizes
     echo ""
     EXE_SIZE=$(du -sh "dist/portdetective" | cut -f1)
     DEB_SIZE=$(du -sh "$DEB_FILE" | cut -f1)
+    APPIMAGE_SIZE=$(du -sh "$APPIMAGE_FILE" | cut -f1)
     echo "Executable size: $EXE_SIZE"
     echo "DEB size: $DEB_SIZE"
+    echo "AppImage size: $APPIMAGE_SIZE"
     
     echo ""
     echo "To install the .deb package:"
@@ -280,6 +403,10 @@ if [ -f "$DEB_FILE" ]; then
     echo ""
     echo "To install dependencies if needed:"
     echo "  sudo apt-get install -f"
+    echo ""
+    echo "To run the AppImage:"
+    echo "  chmod +x $APPIMAGE_FILE"
+    echo "  ./$APPIMAGE_FILE"
 else
     echo ""
     echo "Build failed!"
