@@ -85,6 +85,20 @@ sudo apt-get install -f  # Install any missing dependencies
 sudo portdetective
 ```
 
+### openSUSE / RPM-based Linux
+Download `PortDetective-openSUSE-vX.X.X-x86_64.rpm` from the [Releases](https://github.com/yurividal/PortDetective/releases) page.
+
+```bash
+# Install package
+sudo zypper install --allow-unsigned-rpm PortDetective-openSUSE-vX.X.X-x86_64.rpm
+
+# If dependencies are not already present
+sudo zypper install libpcap1 polkit
+
+# Run
+sudo portdetective
+```
+
 ### Linux (AppImage)
 Download `PortDetective-Linux-vX.X.X-x86_64.AppImage` from the [Releases](https://github.com/yurividal/PortDetective/releases) page.
 
@@ -230,6 +244,13 @@ chmod +x build_mac.sh
 chmod +x build_linux.sh
 ./build_linux.sh
 # Output: dist/portdetective, dist/portdetective_1.0.0.deb, and dist/PortDetective-Linux-1.0.0-x86_64.AppImage
+```
+
+### openSUSE
+```bash
+chmod +x build_opensuse.sh
+./build_opensuse.sh
+# Output: dist/portdetective, dist/PortDetective-openSUSE-1.0.0-x86_64.rpm, and dist/PortDetective-Linux-1.0.0-x86_64.AppImage
 ```
 
 ### Cross-platform (Python)
